@@ -8,37 +8,54 @@
 #include "../shared/data_types.h"
 #include "occupancy.h"
 
-// Read all 8 PCF8574 pins as a single byte via raw I2C (no extra library needed).
-// PCF8574 pulls each pin HIGH internally; a sensor pulling a pin LOW = occupied.
-static uint8_t pcfRead8() {
-    Wire.requestFrom((uint8_t)PCF8574_ADDR, (uint8_t)1);
-    return Wire.available() ? Wire.read() : 0xFF;  // 0xFF = all idle on read failure
+// Read all 16 pins of one PCF8575 as a uint16 via raw I2C (no external library).
+// PCF8575 pulls each pin HIGH internally; a sensor grounding a pin = occupied.
+// Returns raw data (HIGH=empty, LOW=occupied).  Returns 0xFFFF on bus error.
+static uint16_t pcf8575Read(uint8_t addr) {
+    Wire.requestFrom(addr, (uint8_t)2);
+    if (Wire.available() < 2) return 0xFFFF;
+    uint8_t lo = Wire.read();   // P00–P07
+    uint8_t hi = Wire.read();   // P10–P17
+    return (uint16_t)lo | ((uint16_t)hi << 8);
+}
+
+// Probe the I2C bus for all configured chip addresses and log which are found.
+static void detectChips() {
+    Serial.printf("[OCC] scanning %d chip(s): ", OCC_CHIP_COUNT);
+    for (int i = 0; i < OCC_CHIP_COUNT; i++) {
+        Wire.beginTransmission(kOccChipAddrs[i]);
+        uint8_t err = Wire.endTransmission();
+        Serial.printf("0x%02X=%s ", kOccChipAddrs[i], err == 0 ? "OK" : "MISS");
+    }
+    Serial.println();
 }
 
 void taskOccupancy(void* pvParameters) {
     xSemaphoreTake(xMutexI2C, portMAX_DELAY);
     Wire.begin(I2C_SDA_PIN, I2C_SCL_PIN);
-    // Verify PCF8574 is present on the bus
-    Wire.beginTransmission(PCF8574_ADDR);
-    if (Wire.endTransmission() != 0) {
-        Serial.println("[OCC] PCF8574 not found — check wiring and address");
-    }
+    detectChips();
     xSemaphoreGive(xMutexI2C);
 
     for (;;) {
+        OccupancyData fresh = {};
+        fresh.chipCount    = OCC_CHIP_COUNT;
+        fresh.timestampMs  = millis();
+
         xSemaphoreTake(xMutexI2C, portMAX_DELAY);
-        uint8_t raw = pcfRead8();
+        for (int i = 0; i < OCC_CHIP_COUNT; i++) {
+            uint16_t raw = pcf8575Read(kOccChipAddrs[i]);
+            // Invert: bit=1 means sensor pulled pin LOW → seat occupied.
+            // On read error (0xFFFF) the inversion gives 0x0000 — all empty — safe default.
+            fresh.chipData[i]   = ~raw;
+            fresh.occupiedCount += (uint8_t)__builtin_popcount(fresh.chipData[i]);
+        }
         xSemaphoreGive(xMutexI2C);
 
-        // Invert: pin pulled LOW by sensor = occupied (bit = 1)
-        uint8_t mask  = (~raw) & ((1 << SEAT_COUNT) - 1);
-        uint8_t count = (uint8_t)__builtin_popcount(mask);
-
         xSemaphoreTake(xMutexOccupancy, portMAX_DELAY);
-        g_latestOccupancy.seatMask      = mask;
-        g_latestOccupancy.occupiedCount = count;
-        g_latestOccupancy.timestampMs   = millis();
+        g_latestOccupancy = fresh;
         xSemaphoreGive(xMutexOccupancy);
+
+        Serial.printf("[OCC] %d seat(s) occupied\n", fresh.occupiedCount);
 
         vTaskDelay(pdMS_TO_TICKS(500));
     }

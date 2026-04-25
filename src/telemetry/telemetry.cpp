@@ -21,16 +21,25 @@ static String buildPayload(const GpsData& gps,
                            const OccupancyData& occ,
                            bool overspeed) {
     JsonDocument doc;
+
+    // GPS / speed
     doc["ts"]        = gps.timestampMs;
-    doc["lat"]       = gps.latitude;
-    doc["lng"]       = gps.longitude;
+    doc["lat"]       = serialized(String(gps.latitude,  6));
+    doc["lng"]       = serialized(String(gps.longitude, 6));
     doc["speed"]     = gps.speedKmh;
     doc["alt"]       = gps.altitudeM;
     doc["sats"]      = gps.satellites;
     doc["gps_ok"]    = gps.valid;
-    doc["seats"]     = occ.seatMask;
-    doc["occupied"]  = occ.occupiedCount;
     doc["overspeed"] = overspeed;
+
+    // Seat occupancy — one uint16 per PCF8575 chip, sent as a JSON array.
+    // Bit N of chipData[i] = 1 means the (N+1)th seat on chip i is occupied.
+    // The server maps chip index + bit position to a physical seat number.
+    doc["occupied"] = occ.occupiedCount;
+    JsonArray chips = doc["seat_chips"].to<JsonArray>();
+    for (int i = 0; i < occ.chipCount; i++) {
+        chips.add(occ.chipData[i]);
+    }
 
     String out;
     serializeJson(doc, out);
@@ -38,7 +47,6 @@ static String buildPayload(const GpsData& gps,
 }
 
 void taskTelemetry(void* pvParameters) {
-    // Created on first task entry — modem is fully initialised by this point
     static TinyGsmClient gsmClient(modem, 0);
 
     const TickType_t kInterval = pdMS_TO_TICKS(TELEMETRY_INTERVAL_MS);
@@ -47,7 +55,6 @@ void taskTelemetry(void* pvParameters) {
     for (;;) {
         vTaskDelayUntil(&lastWake, kInterval);
 
-        // Snapshot shared state
         GpsData gps = {};
         xSemaphoreTake(xMutexGPS, portMAX_DELAY);
         gps = g_latestGPS;

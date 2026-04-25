@@ -10,14 +10,18 @@
 
 static bool s_fuelCut = false;
 
-static void setRelay(bool cut) {
-    digitalWrite(RELAY_PIN, cut ? RELAY_ACTIVE : !RELAY_ACTIVE);
+// Drive the relay and buzzer together — they always change state as a pair.
+static void applyGovernor(bool cut) {
+    digitalWrite(RELAY_PIN,  cut ? RELAY_ACTIVE  : !RELAY_ACTIVE);
+    digitalWrite(BUZZER_PIN, cut ? HIGH           : LOW);
     s_fuelCut = cut;
 }
 
 void governorInit() {
-    pinMode(RELAY_PIN, OUTPUT);
-    setRelay(false);   // safe state: fuel ON at boot
+    // Relay and buzzer outputs must be safe before any task starts.
+    pinMode(RELAY_PIN,  OUTPUT);
+    pinMode(BUZZER_PIN, OUTPUT);
+    applyGovernor(false);   // fuel ON, buzzer OFF at boot
 }
 
 void taskGovernor(void* pvParameters) {
@@ -25,24 +29,24 @@ void taskGovernor(void* pvParameters) {
     TickType_t lastWake = xTaskGetTickCount();
 
     for (;;) {
-        vTaskDelayUntil(&lastWake, kPeriod);  // deterministic 300 ms loop
+        vTaskDelayUntil(&lastWake, kPeriod);   // deterministic 300 ms cadence
 
         GpsData gps = {};
         xSemaphoreTake(xMutexGPS, portMAX_DELAY);
         gps = g_latestGPS;
         xSemaphoreGive(xMutexGPS);
 
-        if (!gps.valid) continue;
+        if (!gps.valid) continue;   // no fix — leave relay unchanged
 
         if (!s_fuelCut && gps.speedKmh > SPEED_LIMIT_KMH) {
-            setRelay(true);
+            applyGovernor(true);
             xEventGroupSetBits(xEventAlerts, ALERT_OVERSPEED | ALERT_CAMERA_TRIG);
-            Serial.printf("[GOV] OVERSPEED %.1f km/h — fuel CUT\n", gps.speedKmh);
+            Serial.printf("[GOV] OVERSPEED %.1f km/h — fuel CUT, buzzer ON\n", gps.speedKmh);
 
         } else if (s_fuelCut && gps.speedKmh < SPEED_RESTORE_KMH) {
-            setRelay(false);
+            applyGovernor(false);
             xEventGroupClearBits(xEventAlerts, ALERT_OVERSPEED);
-            Serial.printf("[GOV] speed safe %.1f km/h — fuel RESTORED\n", gps.speedKmh);
+            Serial.printf("[GOV] speed safe %.1f km/h — fuel RESTORED, buzzer OFF\n", gps.speedKmh);
         }
     }
 }

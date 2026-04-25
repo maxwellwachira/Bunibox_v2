@@ -4,6 +4,8 @@
 #include <freertos/semphr.h>
 #include <freertos/event_groups.h>
 
+#include "../config.h"   // for OCC_CHIP_COUNT
+
 // ── Core data structures ─────────────────────────────────────────────────────
 
 struct GpsData {
@@ -16,9 +18,15 @@ struct GpsData {
     uint32_t timestampMs;
 };
 
+// Each PCF8575 is read as a 16-bit word (P00–P07 in low byte, P10–P17 in high byte).
+// Bit = 1 means the sensor pulled the pin LOW → seat occupied.
+// Bit = 0 means pin is HIGH (internal pull-up) → seat empty.
+#define MAX_OCC_CHIPS    5   // physical maximum on the board (addresses 0x20–0x24)
+
 struct OccupancyData {
-    uint8_t  seatMask;        // bit N set = seat N occupied
-    uint8_t  occupiedCount;
+    uint16_t chipData[MAX_OCC_CHIPS]; // one uint16 per chip; index == chip order in kOccChipAddrs
+    uint8_t  chipCount;               // how many chips were successfully read this cycle
+    uint8_t  occupiedCount;           // total occupied seats across all chips
     uint32_t timestampMs;
 };
 

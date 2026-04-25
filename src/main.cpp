@@ -20,21 +20,30 @@ TinyGsm modem(Serial1);
 GpsData       g_latestGPS       = {};
 OccupancyData g_latestOccupancy = {};
 
-SemaphoreHandle_t  xMutexModem    = nullptr;
-SemaphoreHandle_t  xMutexI2C      = nullptr;
-SemaphoreHandle_t  xMutexGPS      = nullptr;
+SemaphoreHandle_t  xMutexModem     = nullptr;
+SemaphoreHandle_t  xMutexI2C       = nullptr;
+SemaphoreHandle_t  xMutexGPS       = nullptr;
 SemaphoreHandle_t  xMutexOccupancy = nullptr;
-EventGroupHandle_t xEventAlerts   = nullptr;
+EventGroupHandle_t xEventAlerts    = nullptr;
 
-// ── Modem power-on ───────────────────────────────────────────────────────────
+// ── SIM7000G power-on sequence ───────────────────────────────────────────────
+// 1. Enable SY8089 4.2 V supply (Sim.Pwr.En, active HIGH).
+// 2. Pulse PWRKEY LOW for ≥1 s via Q5 NPN transistor:
+//      GPIO HIGH → Q5 saturates → PWRKEY pulled LOW → module boots.
 static void powerOnModem() {
+    // Step 1 — enable dedicated SIM supply before asserting PWRKEY
+    pinMode(SIM_PWR_EN_PIN, OUTPUT);
+    digitalWrite(SIM_PWR_EN_PIN, HIGH);
+    delay(200);   // allow SY8089 to ramp up and stabilise
+
+    // Step 2 — assert PWRKEY through Q5 (GPIO HIGH = transistor on = PWRKEY LOW)
     pinMode(SIM_PWRKEY_PIN, OUTPUT);
-    digitalWrite(SIM_PWRKEY_PIN, HIGH);
-    delay(100);
-    digitalWrite(SIM_PWRKEY_PIN, LOW);   // pull LOW ≥1 s to trigger boot
-    delay(1200);
-    digitalWrite(SIM_PWRKEY_PIN, HIGH);
-    delay(3000);                          // wait for SIM7000G to become ready
+    digitalWrite(SIM_PWRKEY_PIN, LOW);    // ensure deasserted first
+    delay(50);
+    digitalWrite(SIM_PWRKEY_PIN, HIGH);   // assert: Q5 on → PWRKEY LOW
+    delay(1200);                           // SIM7000G requires ≥1 s
+    digitalWrite(SIM_PWRKEY_PIN, LOW);    // deassert
+    delay(3000);                           // wait for module to become ready
 }
 
 static bool initModem() {
@@ -66,20 +75,19 @@ void setup() {
     delay(500);
     Serial.println("\n=== BuniBox booting ===");
 
-    // Create all synchronisation primitives before any task starts
     xMutexModem     = xSemaphoreCreateMutex();
     xMutexI2C       = xSemaphoreCreateMutex();
     xMutexGPS       = xSemaphoreCreateMutex();
     xMutexOccupancy = xSemaphoreCreateMutex();
     xEventAlerts    = xEventGroupCreate();
 
-    governorInit();   // relay safe state FIRST — before modem or network
+    governorInit();   // relay + buzzer safe state FIRST, before anything else
 
     if (!initModem()) {
         Serial.println("[INIT] modem failed — governor + occupancy still active");
     }
 
-    // Safety-critical tasks pinned to Core 1 (away from any background work on Core 0)
+    // Safety-critical tasks pinned to Core 1
     xTaskCreatePinnedToCore(taskGovernor,  "GOVERNOR",  3072, nullptr, 20, nullptr, 1);
     xTaskCreatePinnedToCore(taskGPS,       "GPS",       4096, nullptr, 15, nullptr, 1);
 
@@ -92,5 +100,5 @@ void setup() {
 }
 
 void loop() {
-    vTaskDelay(portMAX_DELAY);   // hand control to FreeRTOS scheduler
+    vTaskDelay(portMAX_DELAY);
 }
