@@ -32,9 +32,17 @@ void taskGPS(void* pvParameters) {
             fresh.longitude   = lon;
             fresh.speedKmh    = speed;   // SIM7000G returns km/h via AT+CGNSINF
             fresh.altitudeM   = alt;
+            fresh.hdop        = accuracy;
             fresh.satellites  = (uint8_t)usat;
+            fresh.visibleSats = (uint8_t)vsat;
             fresh.valid       = true;
             fresh.timestampMs = millis();
+            fresh.utcYear     = (int16_t)year;
+            fresh.utcMonth    = (uint8_t)month;
+            fresh.utcDay      = (uint8_t)day;
+            fresh.utcHour     = (uint8_t)hour;
+            fresh.utcMin      = (uint8_t)minute;
+            fresh.utcSec      = (uint8_t)sec;
 
             xSemaphoreTake(xMutexGPS, portMAX_DELAY);
             g_latestGPS = fresh;

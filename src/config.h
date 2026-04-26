@@ -1,5 +1,10 @@
 #pragma once
 
+// ── Test mode ─────────────────────────────────────────────────────────────────
+// Uncomment to boot with ONLY the occupancy task running (no modem, no governor,
+// no GPS, no telemetry, no camera).  Useful for bench-testing seat sensors.
+#define SEAT_TEST_ONLY
+
 // ── Bus seat layout ───────────────────────────────────────────────────────────
 // Uncomment ONE line to match the physical wiring harness on the vehicle.
 //   BUS_2ROW: 2× PCF8575 at 0x20 & 0x21 — up to 26 passenger + driver + co-pilot
@@ -34,8 +39,9 @@
 #define CAM_RX_PIN       18   // GPIO18 → RS485.RxD → TP8485E-SR A/Y
 #define CAM_DE_RE_PIN    46   // GPIO46 → RS485.EN  → TP8485E-SR DE/RE
 #define CAM_INT_PIN      45   // GPIO45 → RS485.Int (camera interrupt to ESP32)  // TODO: verify
-// TODO: verify baud rate — check SenseCraft App → Device → Protocol, or try 9600
-#define CAM_BAUD       9600
+// TODO: verify baud rate — check SenseCraft App → Device → Protocol
+// Try 115200 first (common Seeed default); fall back to 9600 if no response.
+#define CAM_BAUD      115200
 
 // Modbus RTU master settings
 #define CAM_SLAVE_ADDR  0x01    // default slave address (configurable via SenseCraft App)
@@ -89,8 +95,9 @@
 #define GPS_POLL_MS        500
 
 // ── Cellular / telemetry ─────────────────────────────────────────────────────
+#define DEVICE_ID             "BB-47392"
 #define CELL_APN              "safaricom"   // TODO: confirm APN with SIM carrier
-#define SERVER_HOST           "api.yourdomain.com"
+#define SERVER_HOST           "172.104.159.240"
 #define SERVER_PORT            80
 #define SERVER_PATH           "/api/v1/telemetry"
 #define TELEMETRY_INTERVAL_MS  10000UL

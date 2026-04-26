@@ -19,6 +19,13 @@ static String rssiLabel(int rssi) {
     return String(-113 + 2 * rssi) + " dBm";
 }
 
+static int rssiDbm(int rssi) {
+    if (rssi == 99) return -999;   // unknown
+    if (rssi == 0)  return -113;
+    if (rssi == 31) return -51;
+    return -113 + 2 * rssi;
+}
+
 static bool ensureGprs() {
     if (modem.isGprsConnected()) return true;
     Serial.printf("[TEL] GPRS dropped (%s) — reconnecting...\n",
@@ -38,18 +45,35 @@ static bool ensureGprs() {
 
 static String buildPayload(const GpsData& gps,
                            const OccupancyData& occ,
-                           bool overspeed) {
+                           const CameraData& cam,
+                           bool overspeed,
+                           int rssi) {
     JsonDocument doc;
 
-    // GPS / speed
+    // UTC wall-clock from GPS fix
+    char utcBuf[25];
+    snprintf(utcBuf, sizeof(utcBuf), "%04d-%02d-%02dT%02d:%02d:%02dZ",
+             gps.utcYear, gps.utcMonth, gps.utcDay,
+             gps.utcHour, gps.utcMin,   gps.utcSec);
+    doc["device_id"] = DEVICE_ID;
+    doc["utc"]       = utcBuf;
     doc["ts"]        = gps.timestampMs;
+
+    // GPS / position / quality
     doc["lat"]       = serialized(String(gps.latitude,  6));
     doc["lng"]       = serialized(String(gps.longitude, 6));
     doc["speed"]     = gps.speedKmh;
     doc["alt"]       = gps.altitudeM;
+    doc["hdop"]      = serialized(String(gps.hdop, 1));
     doc["sats"]      = gps.satellites;
+    doc["vsat"]      = gps.visibleSats;
     doc["gps_ok"]    = gps.valid;
+
+    // Alerts
     doc["overspeed"] = overspeed;
+
+    // Cellular signal
+    doc["signal_dbm"] = rssiDbm(rssi);
 
     // Seat occupancy — one uint16 per PCF8575 chip, sent as a JSON array.
     // Bit N of chipData[i] = 1 means the (N+1)th seat on chip i is occupied.
@@ -59,6 +83,11 @@ static String buildPayload(const GpsData& gps,
     for (int i = 0; i < occ.chipCount; i++) {
         chips.add(occ.chipData[i]);
     }
+
+    // Camera — person-count AI inference
+    doc["cam_ok"]      = cam.valid;
+    doc["cam_persons"] = cam.valid ? cam.personCount : 0;
+    doc["cam_conf"]    = cam.valid ? cam.confidence  : 0;
 
     String out;
     serializeJson(doc, out);
@@ -89,15 +118,21 @@ void taskTelemetry(void* pvParameters) {
         occ = g_latestOccupancy;
         xSemaphoreGive(xMutexOccupancy);
 
+        CameraData cam = {};
+        xSemaphoreTake(xMutexCamera, portMAX_DELAY);
+        cam = g_latestCamera;
+        xSemaphoreGive(xMutexCamera);
+
         bool overspeed = (xEventGroupGetBits(xEventAlerts) & ALERT_OVERSPEED) != 0;
-        String payload = buildPayload(gps, occ, overspeed);
 
         // Check / restore GPRS — this can block for up to 60 s during reconnect.
         // Hold the mutex only for this operation, release before HTTP so GPS
         // isn't starved across the entire reconnect window.
         bool gprsUp = false;
+        int  rssi   = 99;
         if (xSemaphoreTake(xMutexModem, pdMS_TO_TICKS(5000))) {
             gprsUp = ensureGprs();
+            if (gprsUp) rssi = modem.getSignalQuality();
             xSemaphoreGive(xMutexModem);
         } else {
             Serial.println("[TEL] modem busy during GPRS check — skip");
@@ -108,6 +143,8 @@ void taskTelemetry(void* pvParameters) {
             Serial.println("[TEL] no GPRS — skip");
             continue;
         }
+
+        String payload = buildPayload(gps, occ, cam, overspeed, rssi);
 
         // Short mutex window for the actual HTTP POST only.
         if (!xSemaphoreTake(xMutexModem, pdMS_TO_TICKS(5000))) {

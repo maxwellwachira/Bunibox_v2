@@ -195,6 +195,10 @@ void setup() {
     xMutexCamera    = xSemaphoreCreateMutex();
     xEventAlerts    = xEventGroupCreate();
 
+#ifdef SEAT_TEST_ONLY
+    Serial.println("[INIT] *** SEAT_TEST_ONLY mode — modem/GPS/telemetry/camera disabled ***");
+    xTaskCreatePinnedToCore(taskOccupancy, "OCCUPANCY", 2048, nullptr, 10, nullptr, 0);
+#else
     governorInit();   // relay + buzzer safe state FIRST, before anything else
 
     if (!initModem()) {
@@ -217,6 +221,7 @@ void setup() {
     // OTA: lower priority than telemetry so normal operation is never starved.
     // Stack is generous because JSON parsing + TLS handshake live on this stack.
     xTaskCreatePinnedToCore(taskOTA,       "OTA",      10240, nullptr,  3, nullptr, 0);
+#endif
 
     Serial.println("[INIT] all tasks started");
 }

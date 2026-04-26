@@ -13,9 +13,18 @@ struct GpsData {
     float    longitude;
     float    speedKmh;
     float    altitudeM;
-    uint8_t  satellites;
+    float    hdop;
+    uint8_t  satellites;   // used satellites
+    uint8_t  visibleSats;  // total visible
     bool     valid;
     uint32_t timestampMs;
+    // UTC wall-clock from GPS fix
+    int16_t  utcYear;
+    uint8_t  utcMonth;
+    uint8_t  utcDay;
+    uint8_t  utcHour;
+    uint8_t  utcMin;
+    uint8_t  utcSec;
 };
 
 // Each PCF8575 is read as a 16-bit word (P00–P07 in low byte, P10–P17 in high byte).
