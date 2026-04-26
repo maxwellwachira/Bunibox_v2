@@ -51,14 +51,12 @@ static bool hexToBytes(const char* hex, uint8_t* out, size_t outLen) {
 // Skip HTTP response headers; returns true when the blank separator line is found.
 // Caller must provide a TinyGsmClient that has already received its status line.
 static bool skipHttpHeaders(TinyGsmClient& client, uint32_t timeoutMs) {
-    String prev = "_";   // non-empty sentinel so first real line doesn't match
     uint32_t t0 = millis();
     while (millis() - t0 < timeoutMs) {
         if (client.available()) {
             String line = client.readStringUntil('\n');
             line.trim();
-            if (line.length() == 0 && prev.length() == 0) return true;
-            prev = line;
+            if (line.length() == 0) return true;  // blank line = end of headers
         } else {
             vTaskDelay(pdMS_TO_TICKS(5));
         }

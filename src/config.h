@@ -3,7 +3,7 @@
 // ── Test mode ─────────────────────────────────────────────────────────────────
 // Uncomment to boot with ONLY the occupancy task running (no modem, no governor,
 // no GPS, no telemetry, no camera).  Useful for bench-testing seat sensors.
-// #define SEAT_TEST_ONLY
+//  #define SEAT_TEST_ONLY
 
 // ── Bus seat layout ───────────────────────────────────────────────────────────
 // Uncomment ONE line to match the physical wiring harness on the vehicle.
