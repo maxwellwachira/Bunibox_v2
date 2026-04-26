@@ -30,16 +30,28 @@ struct OccupancyData {
     uint32_t timestampMs;
 };
 
+struct CameraData {
+    uint16_t personCount;  // number of persons detected by inference model
+    uint16_t confidence;   // inference confidence reported by camera (0–100)
+    bool     valid;
+    uint32_t timestampMs;
+};
+
 // ── Alert event-group bit masks ──────────────────────────────────────────────
-#define ALERT_OVERSPEED    (1 << 0)
-#define ALERT_CAMERA_TRIG  (1 << 1)
+#define ALERT_OVERSPEED      (1 << 0)
+#define ALERT_CAMERA_TRIG    (1 << 1)
+// Set by telemetry task when the server responds with "ota_available": true.
+// Clears automatically when the OTA task wakes and consumes it.
+#define ALERT_OTA_AVAILABLE  (1 << 2)
 
 // ── Shared state — defined in main.cpp, extern'd everywhere else ─────────────
 extern GpsData            g_latestGPS;
 extern OccupancyData      g_latestOccupancy;
+extern CameraData         g_latestCamera;
 
 extern SemaphoreHandle_t  xMutexModem;
 extern SemaphoreHandle_t  xMutexI2C;
 extern SemaphoreHandle_t  xMutexGPS;
 extern SemaphoreHandle_t  xMutexOccupancy;
+extern SemaphoreHandle_t  xMutexCamera;
 extern EventGroupHandle_t xEventAlerts;

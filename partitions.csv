@@ -1,0 +1,16 @@
+# BuniBox partition table — ESP32-S3-WROOM-1-N16R8 (16 MB flash)
+#
+# Offset layout (all values hex):
+#   0x0000 – 0x8FFF   : bootloader (managed by IDF, not listed here)
+#   0x9000 – 0xDFFF   : NVS (20 KB)
+#   0xE000 – 0xFFFF   : OTA data partition (8 KB, tracks active app slot)
+#   0x10000 – 0x3CFFFF: app0 / ota_0 (3.75 MB)
+#   0x3D0000 – 0x78FFFF: app1 / ota_1 (3.75 MB)
+#   0x790000 – 0xFFFFFF: SPIFFS data (8.4 MB — logs, config, offline queue)
+#
+# Name,     Type, SubType, Offset,   Size
+nvs,        data, nvs,     0x9000,   0x5000
+otadata,    data, ota,     0xe000,   0x2000
+app0,       app,  ota_0,   0x10000,  0x3C0000
+app1,       app,  ota_1,   0x3D0000, 0x3C0000
+spiffs,     data, spiffs,  0x790000, 0x870000

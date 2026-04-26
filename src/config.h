@@ -28,13 +28,24 @@
 #define SIM_BAUD      115200
 
 // ── RS485 AI Camera  UART2 ───────────────────────────────────────────────────
-// Transceiver: TP8485E-SR.  DE and RE are tied together on CAM_DE_RE_PIN.
-// HIGH = transmit; LOW = receive.
+// Seeed RS485 Vision AI Camera (S-VA-01B). Modbus RTU slave over TP8485E-SR.
+// DE and RE are tied together on CAM_DE_RE_PIN: HIGH=transmit, LOW=receive.
 #define CAM_TX_PIN       17   // GPIO17 → RS485.TxD → TP8485E-SR D
 #define CAM_RX_PIN       18   // GPIO18 → RS485.RxD → TP8485E-SR A/Y
 #define CAM_DE_RE_PIN    46   // GPIO46 → RS485.EN  → TP8485E-SR DE/RE
 #define CAM_INT_PIN      45   // GPIO45 → RS485.Int (camera interrupt to ESP32)  // TODO: verify
-#define CAM_BAUD     115200
+// TODO: verify baud rate — check SenseCraft App → Device → Protocol, or try 9600
+#define CAM_BAUD       9600
+
+// Modbus RTU master settings
+#define CAM_SLAVE_ADDR  0x01    // default slave address (configurable via SenseCraft App)
+#define CAM_POLL_MS     1000UL  // normal polling interval when no trigger fires
+
+// Holding register start address and count.
+// TODO: confirm exact addresses from SenseCraft App → Device → Protocol tab or datasheet.
+// With people-count model loaded, 0x0004 is expected to hold person count.
+#define CAM_REG_FIRST   0x0004  // first register to read
+#define CAM_REG_COUNT   2       // number of registers: [0]=person count, [1]=confidence
 
 // ── I²C  ──────────────────────────────────────────────────────────────────────
 // Shared bus: PCF8575 seat-occupancy chips + PCF8574AT display expander (U7).
@@ -78,8 +89,27 @@
 #define GPS_POLL_MS        500
 
 // ── Cellular / telemetry ─────────────────────────────────────────────────────
-#define CELL_APN              "your-apn-here"
+#define CELL_APN              "safaricom"   // TODO: confirm APN with SIM carrier
 #define SERVER_HOST           "api.yourdomain.com"
 #define SERVER_PORT            80
 #define SERVER_PATH           "/api/v1/telemetry"
 #define TELEMETRY_INTERVAL_MS  10000UL
+
+// ── OTA firmware update ───────────────────────────────────────────────────────
+// The OTA server can be the same host as the telemetry server.
+// MANIFEST_PATH returns JSON: { version, url, sha256, size }
+// FIRMWARE_PATH_PREFIX is the URL path to the raw .bin (same host/port).
+#define OTA_SERVER_HOST       SERVER_HOST
+#define OTA_SERVER_PORT       SERVER_PORT
+#define OTA_MANIFEST_PATH     "/api/v1/firmware/latest"
+
+// 8 KB per HTTP Range request — balances GPRS reliability vs. connection overhead.
+// Each chunk holds the modem mutex for ~3–8 s; GPS/telemetry skip those cycles.
+#define OTA_CHUNK_SIZE        (8 * 1024)
+
+// Periodic version-check interval (6 hours). Telemetry response can also trigger
+// an immediate check via the ALERT_OTA_AVAILABLE event bit.
+#define OTA_POLL_INTERVAL_MS  (6UL * 60UL * 60UL * 1000UL)
+
+// OTA is blocked while the vehicle is moving faster than this speed.
+#define OTA_MAX_SPEED_KMH     5.0f

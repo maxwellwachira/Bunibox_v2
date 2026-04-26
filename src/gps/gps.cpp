@@ -22,6 +22,8 @@ void taskGPS(void* pvParameters) {
                               &year, &month, &day,
                               &hour, &minute, &sec);
             xSemaphoreGive(xMutexModem);
+        } else {
+            Serial.println("[GPS] modem busy — skipped this cycle");
         }
 
         if (ok) {
@@ -38,10 +40,18 @@ void taskGPS(void* pvParameters) {
             g_latestGPS = fresh;
             xSemaphoreGive(xMutexGPS);
 
-            Serial.printf("[GPS] %.6f, %.6f  %.1f km/h  sats=%d\n",
-                          lat, lon, speed, usat);
+            Serial.printf("[GPS] fix  lat=%.6f lon=%.6f  spd=%.1f km/h  alt=%.1f m\n",
+                          lat, lon, speed, alt);
+            Serial.printf("[GPS]      sats=%d/%d  hdop=%.1f  utc=%04d-%02d-%02d %02d:%02d:%02d\n",
+                          usat, vsat, accuracy, year, month, day, hour, minute, sec);
         } else {
-            Serial.println("[GPS] no fix");
+            // vsat > 0 means the module sees satellites but can't form a fix yet.
+            // vsat == 0 typically means no signal or GPS not yet powered.
+            if (vsat > 0) {
+                Serial.printf("[GPS] no fix  visible=%d sats\n", vsat);
+            } else {
+                Serial.println("[GPS] no fix  (no satellites visible)");
+            }
         }
 
         vTaskDelay(pdMS_TO_TICKS(GPS_POLL_MS));
