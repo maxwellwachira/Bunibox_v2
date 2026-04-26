@@ -3,7 +3,7 @@
 // ── Test mode ─────────────────────────────────────────────────────────────────
 // Uncomment to boot with ONLY the occupancy task running (no modem, no governor,
 // no GPS, no telemetry, no camera).  Useful for bench-testing seat sensors.
-#define SEAT_TEST_ONLY
+// #define SEAT_TEST_ONLY
 
 // ── Bus seat layout ───────────────────────────────────────────────────────────
 // Uncomment ONE line to match the physical wiring harness on the vehicle.
@@ -98,7 +98,7 @@
 #define DEVICE_ID             "BB-47392"
 #define CELL_APN              "safaricom"   // TODO: confirm APN with SIM carrier
 #define SERVER_HOST           "172.104.159.240"
-#define SERVER_PORT            80
+#define SERVER_PORT            3001  // bypass Safaricom port-80 transparent proxy
 #define SERVER_PATH           "/api/v1/telemetry"
 #define TELEMETRY_INTERVAL_MS  10000UL
 

@@ -28,8 +28,18 @@ static int rssiDbm(int rssi) {
 
 static bool ensureGprs() {
     if (modem.isGprsConnected()) return true;
-    Serial.printf("[TEL] GPRS dropped (%s) — reconnecting...\n",
-                  rssiLabel(modem.getSignalQuality()).c_str());
+
+    int rssi = modem.getSignalQuality();
+    Serial.printf("[TEL] GPRS dropped (%s) — reconnecting...\n", rssiLabel(rssi).c_str());
+
+    // gprsConnect() blocks for ~85 s on SIM7000G when there is no signal.
+    // That starves IDLE0 and trips the task watchdog.  Skip the attempt entirely
+    // when rssi==99 (no signal); the next telemetry cycle will retry.
+    if (rssi == 99) {
+        Serial.println("[TEL] no signal — deferring reconnect");
+        return false;
+    }
+
     bool ok = modem.gprsConnect(CELL_APN, "", "");
     if (ok) {
         Serial.printf("[TEL] GPRS up  operator=%s  signal=%s  IP=%s\n",

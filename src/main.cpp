@@ -183,7 +183,7 @@ void setup() {
     // legitimate reconnect attempts don't crash the device.
     // IDF 4.4 has no reconfigure(); deinit + reinit + re-subscribe idle tasks.
     esp_task_wdt_deinit();
-    esp_task_wdt_init(90, true);
+    esp_task_wdt_init(120, true);  // 120 s: gprsConnect() can block ~85 s on AT+CIICR
     for (int cpu = 0; cpu < portNUM_PROCESSORS; cpu++) {
         esp_task_wdt_add(xTaskGetIdleTaskHandleForCPU(cpu));
     }
